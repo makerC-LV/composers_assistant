@@ -1,0 +1,19 @@
+part : item*
+item : note | chord | setvol
+
+note: pitch duration? volume?
+
+
+pitch: /[CDEFGABcdefgabRr][#-]?[012345678]?/
+duration: /[whqts]\.?/
+volume: ":" INT
+
+chord: "[" chord_desc "]" duration? volume?
+chord_desc: pitch+
+
+setvol: "v" volume
+
+
+%import common.INT
+%import common.WS
+%ignore WS
