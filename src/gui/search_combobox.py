@@ -1,6 +1,3 @@
-# Author: Miguel Martinez Lopez
-# Version: 0.8
-
 import re
 
 from tkinter import StringVar, Entry, Frame, Listbox, Scrollbar, END, SINGLE, N, E, W, S, VERTICAL, HORIZONTAL
@@ -41,13 +38,13 @@ class Combobox_Autocomplete(Entry, object):
                                                                      matches_function(entry_data, item)]
                 else:
                     if startswith_match:
-                        def matches_function(escaped_entry_data, item):
+                        def matches_function(escaped_entry_data, item):  # type: ignore
                             if re.match(escaped_entry_data, item, re.IGNORECASE):
                                 return True
                             else:
                                 return False
                     else:
-                        def matches_function(escaped_entry_data, item):
+                        def matches_function(escaped_entry_data, item):  # type: ignore
                             if re.search(escaped_entry_data, item, re.IGNORECASE):
                                 return True
                             else:
@@ -257,10 +254,7 @@ class Combobox_Autocomplete(Entry, object):
 
 
 if __name__ == '__main__':
-    try:
-        from Tkinter import Tk
-    except ImportError:
-        from tkinter import Tk
+    from tkinter import Tk
 
     list_of_items = ["Cordell Cannata", "Lacey Naples", "Zachery Manigault", "Regan Brunt", "Mario Hilgefort",
                      "Austin Phong", "Moises Saum", "Willy Neill", "Rosendo Sokoloff", "Salley Christenberry",

@@ -9,9 +9,14 @@ from composition.application import MultiTrack, AudioPlayer, Observable, Track, 
 from gui.search_combobox import Combobox_Autocomplete
 from gui.text_with_var import TextWithVar
 from gui.vertically_scrollable_frame import VerticalScrolledFrame
-from music21_addons.sequencer import MidoSynth
+from music21_addons.sequencer import MidoSynth, PyFluidSynth
 from pyo_addons.sfz_instrument import read_sfz_config
-from utils import elogger
+
+import logging
+
+from utils.midi_instrument_defs import get_flat_gm_instrument_map
+
+logger = logging.getLogger(__name__)
 
 
 def connect_tvar_obs(tvar: Variable, obs: Observable, debug=False):
@@ -25,7 +30,7 @@ def connect_tvar_obs(tvar: Variable, obs: Observable, debug=False):
         if tvar.get() != new_value:
             tvar.set(new_value)
             if debug:
-                elogger.info("Setting tvar to ", threading.get_ident(), new_value)
+                logger.info("Setting tvar to (thread: %s) %s", threading.get_ident(), new_value)
 
 
 class AudioPlayerFrame(Frame):
@@ -59,6 +64,7 @@ class AudioPlayerFrame(Frame):
 
         @audio_player.state.changed.register
         def state_changed(old_value, new_value):
+            icon = None
             if new_value == APSTATE_STOPPED or new_value == APSTATE_PAUSED:
                 icon = self.play_icon
             elif new_value == APSTATE_PLAYING:
@@ -219,6 +225,7 @@ def main():
 
 
 if __name__ == '__main__':
-    elogger.config_logging(debug_on=False, console=True)
     MidoSynth.configure_instrument_map(read_sfz_config('../config/dskconfig.json'))
+    PyFluidSynth.init_synth('/Users/shiva/sounds/soundfonts/FluidR3_GM.sf2')
+    PyFluidSynth.configure_instrument_map(get_flat_gm_instrument_map())
     main()

@@ -9,6 +9,9 @@ from pyo import PyoGuiKeyboard, EVT_PYO_GUI_KEYBOARD
 from pyo_addons.pyo_midi_server import instrument_generator, MidiSetup, run_server
 from pyo_addons.sfz_instrument import sfz_voice_generator, SFZVoice, get_sfz_map
 
+import logging
+logger = logging.getLogger(__name__)
+
 # get_sfz_map('/Users/shiva/sounds/DSKMusic/sfz')
 # exit()
 

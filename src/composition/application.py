@@ -1,11 +1,13 @@
+import logging
 import threading
 from typing import Any, Dict, Tuple
 
 from music21 import stream, key, meter, instrument
 
 from music21_addons.onetrack import onetrack_parser, onetrack_to_part, part_to_onetrack
-from music21_addons.sequencer import MySequencer, MidoSynth
-from utils import elogger
+from music21_addons.sequencer import MySequencer, PyFluidSynth
+
+logger = logging.getLogger(__name__)
 
 
 class Event(object):
@@ -37,7 +39,7 @@ class Observable(object):
         if old_value != v:
             self._value = v
             if self.debug:
-                elogger.info("Setting observable value:", threading.get_ident(), v)
+                logger.info("Setting observable value: (thread:%s) %s", threading.get_ident(), v)
             self.changed.notify(old_value, v)
 
 
@@ -60,7 +62,7 @@ class Track():
     def get_instrument_names(self):
         return self.flatten_instruments(self.imap)
 
-    def get_part(self) -> stream.Part:
+    def get_part(self) -> Tuple[stream.Part, Dict]:
         part, notemap = onetrack_to_part(self.tiny.value, self.parser, id=self)
         # tnc = tinyNotation.Converter(self.tiny.value)
         # tnc.parse()
@@ -144,8 +146,8 @@ class AudioPlayer():
         self.tempo = Observable(60)
         self.length = Observable(60000)
         self.cue_pos = Observable(0)
-        self.sequencer = MySequencer(MidoSynth(True))
-        # self.sequencer = MySequencer(PyFluidSynth())
+        # self.sequencer = MySequencer(MidoSynth(True))
+        self.sequencer = MySequencer(PyFluidSynth())
 
     def play_or_pause(self, tracks, timesig):
         if self.state.value == APSTATE_PLAYING:
@@ -184,12 +186,12 @@ class AudioPlayer():
             self.sequencer.play(score, bpm, now_playing, progress_update, self.finished)
             self.state.value = APSTATE_PLAYING
 
-    def monitor(self):
-        while self.sp and self.sp.pygame.mixer.music.get_busy():
-            print("pos", self.sp.pygame.mixer.music.get_pos())
-            self.sp.pygame.time.wait(100)
-        if self.state.value == APSTATE_PLAYING:  # Playback ended
-            self.stop()
+    # def monitor(self):
+    #     while self.sp and self.sp.pygame.mixer.music.get_busy():
+    #         print("pos", self.sp.pygame.mixer.music.get_pos())
+    #         self.sp.pygame.time.wait(100)
+    #     if self.state.value == APSTATE_PLAYING:  # Playback ended
+    #         self.stop()
 
     def pause(self):
         if self.state.value == APSTATE_PLAYING:

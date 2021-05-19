@@ -1,7 +1,7 @@
 from music21 import stream, instrument
 
 from music21_addons.onetrack import parse_onetrack, to_part
-from music21_addons.sequencer import MySequencer, TextSynth, MidoSynth
+from music21_addons.sequencer import MySequencer, MidoSynth
 
 
 def now_playing_fn(pl=None):

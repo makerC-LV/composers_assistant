@@ -1,7 +1,8 @@
+import logging
 import threading
-from threading import Thread
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple
+from threading import Thread
+from typing import Dict, Tuple, Optional
 
 import fluidsynth
 import mido
@@ -10,11 +11,16 @@ from mido import Message
 from music21 import tempo, note, chord
 from sortedcontainers import SortedDict
 
-from utils import elogger
-from utils.midi_instrument_defs import get_flat_gm_instrument_map
+logger = logging.getLogger(__name__)
 
 
 class Synth(ABC):
+
+    @classmethod
+    @abstractmethod
+    def configure_instrument_map(cls, instrument_map: Dict[Tuple[str, str], int]):
+        pass
+
     @abstractmethod
     def note_on(self, notenum, chan, velocity):
         pass
@@ -28,57 +34,65 @@ class Synth(ABC):
         pass
 
     @abstractmethod
-    def get_instrument_map(self) -> Dict[Tuple[str, str], int]:
-        return get_flat_gm_instrument_map()
+    def get_instrument_map(self) -> Optional[Dict[Tuple[str, str], int]]:
+        pass
 
 
 class TextSynth(Synth):
 
     def note_on(self, notenum, chan, velocity):
-        elogger.debug("note_on:", notenum, chan, velocity)
+        logger.debug("note_on: %s %s %s ", notenum, chan, velocity)
 
     def note_off(self, notenum, chan, velocity):
-        elogger.debug("note_off:", notenum, chan, velocity)
+        logger.debug("note_off: %s %s %s ", notenum, chan, velocity)
 
     def program_change(self, chan, inst):
-        elogger.debug("program_change", chan, inst)
+        logger.debug("program_change: %s %s", chan, inst)
 
 
 class PyFluidSynth(Synth):
     fs = None
     sfid = None
+    _instrument_map = None
 
     @classmethod
-    def init_synth(cls):
+    def configure_instrument_map(cls, instrument_map: Dict[Tuple[str, str], int]):
+        PyFluidSynth._instrument_map = instrument_map
+
+    @classmethod
+    def init_synth(cls, soundfont_file):
         if cls.fs is not None:
             return
         cls.fs = fluidsynth.Synth()
         cls.fs.start()
-        cls.sfid = cls.fs.sfload('/Users/shiva/sounds/soundfonts/FluidR3_GM.sf2')
+        cls.sfid = cls.fs.sfload(soundfont_file)
 
     def __init__(self):
-        PyFluidSynth.init_synth()
+        pass
 
     def note_on(self, notenum, chan, velocity):
-        elogger.debug("note_on:", notenum, chan, velocity)
+        logger.debug("note_on: %s %s %s ", notenum, chan, velocity)
         PyFluidSynth.fs.noteon(chan, notenum, velocity)
 
     def note_off(self, notenum, chan, velocity):
-        elogger.debug("note_off:", notenum, chan, velocity)
+        logger.debug("note_off: %s %s %s ", notenum, chan, velocity)
         PyFluidSynth.fs.noteoff(chan, notenum)
 
     def program_change(self, chan, inst):
-        elogger.debug("program_change", chan, inst)
+        logger.debug("program_change: %s %s", chan, inst)
         bank = 0
         preset = inst
         PyFluidSynth.fs.program_select(chan, PyFluidSynth.sfid, bank, preset)
+
+    def get_instrument_map(self) -> Optional[Dict[Tuple[str, str], int]]:
+        return PyFluidSynth._instrument_map
 
 
 class MidoSynth(Synth):
     _instrument_map = None
 
     @classmethod
-    def configure_instrument_map(cls, instrument_map):
+    def configure_instrument_map(cls, instrument_map: Dict[Tuple[str, str], int]):
         MidoSynth._instrument_map = instrument_map
 
     def __init__(self, debug=False):
@@ -87,30 +101,36 @@ class MidoSynth(Synth):
         pname = mido.get_output_names()[0]
         self.port = mido.open_output(pname)
 
+    def __del__(self):
+        self.port.close()
+
     def note_on(self, notenum, chan, velocity):
         if self.debug:
-            elogger.info("note_on:", notenum, chan, velocity)
+            logger.info("note_on: %s %s %s ", notenum, chan, velocity)
         msg = Message('note_on', note=notenum, channel=chan, velocity=velocity)
         self.port.send(msg)
 
     def note_off(self, notenum, chan, velocity):
         if self.debug:
-            elogger.info("note_off:", notenum, chan, velocity)
+            logger.info("note_off: %s %s %s ", notenum, chan, velocity)
         msg = Message('note_off', note=notenum, channel=chan, velocity=velocity)
         self.port.send(msg)
 
     def program_change(self, chan, inst):
         if self.debug:
-            elogger.info("program_change", chan, inst)
+            logger.info("program_change: %s %s", chan, inst)
         msg = Message('program_change', channel=chan, program=inst)
         self.port.send(msg)
 
-    def get_instrument_map(self) -> Dict[Tuple[str, str], int]:
+    def get_instrument_map(self) -> Optional[Dict[Tuple[str, str], int]]:
         return MidoSynth._instrument_map
 
 
 def noop(*args):
     pass
+
+
+DEFAULT_VELOCITY = 60
 
 
 class MySequencer():
@@ -186,7 +206,7 @@ class MySequencer():
         self.pos_lock.release()
 
     def process_one(self, ncr, is_on, inst, chan, send_notes):
-        # elogger.info("processing:", ncr, is_on, send_notes)
+        # logger.info("processing:", ncr, is_on, send_notes)
         if self.channel_inst[chan] != inst:
             self.synth.program_change(chan, inst)
             self.channel_inst[chan] = inst
@@ -199,19 +219,30 @@ class MySequencer():
                 on_fn = self.remove_from_on
 
             if isinstance(ncr, note.Note):
-                note_fn(ncr.pitch.midi, chan, ncr.volume.velocity)
+                velocity = self.compute_velocity(ncr.volume, DEFAULT_VELOCITY)
+                note_fn(ncr.pitch.midi, chan, velocity)
                 on_fn(id(ncr), ncr, inst, chan)
             elif isinstance(ncr, chord.Chord):
-                for p in ncr.pitches:
-                    note_fn(p.midi, chan, ncr.volume.velocity)
+                chord_velocity = self.compute_velocity(ncr.volume, None)
+                num_pitches = len(ncr.pitches)
+                for n in ncr.notes:
+                    velocity = int(chord_velocity / num_pitches) if chord_velocity is not None else \
+                        self.compute_velocity(n.volume, DEFAULT_VELOCITY / num_pitches)
+                    note_fn(n.pitch.midi, chan, velocity)
                 on_fn(id(ncr), ncr, inst, chan)
 
+    def compute_velocity(self, volume, default):
+        if volume is None or volume.velocity is None:
+            return default
+        else:
+            return volume.velocity
+
     def add_to_on(self, id, ncr, inst, chan):
-        # elogger.info(self.on_items)
+        # logger.info(self.on_items)
         self.on_items[id] = (ncr, inst, chan)
 
     def remove_from_on(self, id, ncr, inst, chan):
-        # elogger.info(self.on_items)
+        # logger.info(self.on_items)
         if id in self.on_items:
             self.on_items.pop(id)
 
@@ -243,7 +274,7 @@ class MySequencer():
         self.set_pos(0)
 
     def get_to_play(self, score, bpm):
-        sd = SortedDict()
+        sd = SortedDict()  # : type Dict[float, Any]
         mm = tempo.MetronomeMark(number=bpm)
         # mm.durationToSeconds(offset)
         unused_channels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15]
@@ -258,8 +289,11 @@ class MySequencer():
         return sd
 
     def get_instrument_number(self, part, unused_channels):
-        inst = part.getElementsByClass('Instrument')[0]
-        inum = inst.midiProgram
+        insts = part.getElementsByClass('Instrument')
+        inum = 0
+        if insts is not None and len(insts) > 0:
+            inst = insts[0]
+            inum = inst.midiProgram if inst.midiProgram is not None else 0
         chan = unused_channels[0]
         unused_channels.remove(chan)
         return inum, chan
@@ -275,3 +309,14 @@ class MySequencer():
         for (ncr, inst, chan) in on:
             self.process_one(ncr, False, inst, chan, True)
         self.on_items.clear()
+
+
+if __name__ == '__main__':
+    from music21 import converter, stream
+
+    part = converter.parse('tinynotation: 3/4 C4 D E 2/4 F G A B 1/4 c')
+    score = stream.Score()
+    score.insert(0, part)
+    seq = MySequencer(MidoSynth())
+    seq.play(score, 90)
+    # time.sleep(5)

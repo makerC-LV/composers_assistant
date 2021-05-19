@@ -6,6 +6,10 @@ from typing import Optional, List, Dict, Union, Tuple, Any
 from lark import Lark, Transformer, Token, ParseError
 from music21 import volume, stream, duration, chord, midi, note
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 DEFAULT_VOLUME = 60
 DEFAULT_DURATION = 'q'
 DEFAULT_OCTAVE = 4
@@ -127,6 +131,7 @@ def get_velocity(vol, default=DEFAULT_VOLUME):
 
 class OneTrackTransformer(Transformer):
     def __init__(self, debug=False):
+        super().__init__()
         self.vol = DEFAULT_VOLUME
         self.pdebug = debug
 
@@ -195,8 +200,8 @@ def to_text(obj_list) -> str:
     return ' '.join([str(x) for x in obj_list])
 
 
-def to_part(obj_list, track=None) -> stream.Part:
-    map = {}    # type: Dict[int, Tuple[Union[PChord, PNote], Any]]
+def to_part(obj_list, track=None) -> Tuple[stream.Part, Dict[int, Tuple[Union[PChord, PNote], Any]]]:
+    map = {}  # type: Dict[int, Tuple[Union[PChord, PNote], Any]]
     curr_vel = DEFAULT_VOLUME
     part = stream.Part()
     for cn in obj_list:
@@ -235,7 +240,7 @@ def to_part(obj_list, track=None) -> stream.Part:
 def parse_onetrack(text) -> List:
     parser = onetrack_parser()
     tree = parser.parse(text)
-    nl = OneTrackTransformer().transform(tree)
+    nl = OneTrackTransformer().transform(tree)  # type: List
     return nl
 
 
@@ -265,7 +270,7 @@ def volume_to_string(volume, current_velocity):
 
 def part_to_onetrack(part: stream.Part):
     part.makeRests()
-    symbols = []   # type: List[str]
+    symbols = []  # type: List[str]
     current_velocity = 0
     for ncr in part.flat.getElementsByClass(['Note', 'Chord', 'Rest']):
         ds = get_duration_string(ncr.duration)
@@ -285,13 +290,13 @@ def part_to_onetrack(part: stream.Part):
             if vstr:
                 symbols.append('v' + vstr)
                 symbols.append(' ')
-            symbols.append['[']
+            symbols.append('[')
             for p in ncr.pitches:
                 if p.octave == DEFAULT_OCTAVE:
                     p.octave = None
                 symbols.append(p.nameWithOctave)
                 symbols.append(' ')
-            symbols.append[']']
+            symbols.append(']')
             symbols.append(ds)
 
         else:

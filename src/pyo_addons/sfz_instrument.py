@@ -146,7 +146,7 @@ def get_flat_sfz_map(map) -> Dict[Tuple[str, str], int]:
 
 def get_sfz_map_from_config(file) -> Dict[str, int]:
     with open(file, 'r') as cf:
-        map = json.load(cf)
+        map = json.load(cf)   #type: Dict[str, int]
     return map
 
 
