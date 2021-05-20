@@ -1,3 +1,4 @@
+import logging
 import time
 from threading import Thread
 
@@ -6,41 +7,14 @@ from threading import Thread
 import wx
 from pyo import PyoGuiKeyboard, EVT_PYO_GUI_KEYBOARD
 
-from pyo_addons.pyo_midi_server import instrument_generator, MidiSetup, run_server
-from pyo_addons.sfz_instrument import sfz_voice_generator, SFZVoice, get_sfz_map
+from pyo_addons.embedded_pyo_synth import instrument_generator, PyoSynth
+from pyo_addons.sfz_instrument import sfz_voice_generator, SFZVoice, get_sfz_map_from_config, \
+    read_sfz_config
 
-import logging
 logger = logging.getLogger(__name__)
 
-# get_sfz_map('/Users/shiva/sounds/DSKMusic/sfz')
-# exit()
-
-map = get_sfz_map('/Users/shiva/sounds/DSKMusic/sfz')
-
-# sine = instrument_generator(4, voice_generator(SineVoice))
-# INST_PROGRAMS = {1: instrument_generator(4, sfz_voice_generator('Big.sfz')), 2: sine, 3: sine, 4: sine}
-
-INST_PROGRAMS = {i: instrument_generator(4, sfz_voice_generator(name)) for i, name in enumerate(map.keys())}
-
-ms = MidiSetup(INST_PROGRAMS)
-# map = {
-#     'Classic Grand Piano': '/Users/shiva/sounds/DSKMusic/sfz/DSK Music - Classic Grand Piano/Classic Grand Piano.sfz'}
-
-# map = {
-#     'Analog Kit': '/Users/shiva/sounds/DSKMusic/sfz/DSK Music - GM Drum Kits/Analog Kit.sfz'}
-
-# map = {
-#     'Big': '/Users/shiva/sounds/DSKMusic/sfz/DSK Music - Organs/Big.sfz'}
-
-
-server = run_server(ms, lambda *args: SFZVoice.read_sounds(map))
-
-for channel in range(0, 5):
-    # msg = Message('program_change', channel=channel, program=1)
-    # blist = msg.bytes()
-    # print(blist)
-    ms.channels[channel].pchange(1)
-    # server.addMidiEvent(blist[0], blist[1], 0)
+pyo_synth = None
+map = None
 
 
 class MyFrame(wx.Frame):
@@ -77,7 +51,7 @@ class MyFrame(wx.Frame):
         panel.SetSizer(box)
 
     def on_quit(self, evt):
-        server.stop()
+        pyo_synth.stop()
         time.sleep(0.25)
         self.Destroy()
 
@@ -86,15 +60,30 @@ class MyFrame(wx.Frame):
         velocity = evt.value[1]
         print("Pitch:    %d" % pitch)
         print("Velocity: %d" % velocity)
-        Thread(target=lambda *args: ms.channels[0].note_on(pitch, velocity)).start()
+        Thread(target=lambda *args: pyo_synth.note_on(pitch, 0, velocity)).start()
 
     def onChoice(self, event):
         name = self.choice.GetString(self.choice.GetSelection())
         program = [x for x in map.keys()].index(name)
-        ms.channels[0].pchange(program)
+        pyo_synth.program_change(0, program)
 
 
-app = wx.App(False)
-mainFrame = MyFrame(None, title='Instrument Tester')
-mainFrame.Show()
-app.MainLoop()
+if __name__ == '__main__':
+    # Alternate PyoSynth config
+    # sine = instrument_generator(4, voice_generator(SineVoice))
+    # INST_PROGRAMS = {1: sine, 2: sine, 3: sine, 4: sine}
+
+    # Configure PyoSynth here
+    map = get_sfz_map_from_config('../config/dskconfig.json')
+    INST_PROGRAMS = {i: instrument_generator(4, sfz_voice_generator(name)) for i, name in enumerate(map.keys())}
+    PyoSynth.configure(INST_PROGRAMS, lambda *args: SFZVoice.read_sounds(map))
+    PyoSynth.configure_instrument_map(read_sfz_config('../config/dskconfig.json'))
+
+    # Needs to be global so it doesn't get garbage collected
+    pyo_synth = PyoSynth()
+    pyo_synth.program_change(0, 0)
+
+    app = wx.App(False)
+    mainFrame = MyFrame(None, title='Instrument Tester')
+    mainFrame.Show()
+    app.MainLoop()

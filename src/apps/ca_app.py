@@ -9,8 +9,6 @@ from composition.application import MultiTrack, AudioPlayer, Observable, Track, 
 from gui.search_combobox import Combobox_Autocomplete
 from gui.text_with_var import TextWithVar
 from gui.vertically_scrollable_frame import VerticalScrolledFrame
-from music21_addons.sequencer import MidoSynth, PyFluidSynth
-from pyo_addons.sfz_instrument import read_sfz_config
 
 import logging
 
@@ -215,17 +213,29 @@ class MainWindow(Frame):
         self.multitrack_frame.connect(self.multitrack)
 
 
-def main():
+def main(synth):
     root = Tk()
     mw = MainWindow(root)
-    mt = MultiTrack(mw)
+    mt = MultiTrack(mw, synth)
     mw.connect(mt)
     mw.pack(expand=True, fill='both', padx=2, pady=2)
     mw.mainloop()
 
 
 if __name__ == '__main__':
-    MidoSynth.configure_instrument_map(read_sfz_config('../config/dskconfig.json'))
+    # from music21_addons.sequencer import MidoSythn
+    # MidoSynth.configure_instrument_map(read_sfz_config('../config/dskconfig.json'))
+    # main(MidoSynth())
+
+    # from pyo_addons.sfz_instrument import read_sfz_config, get_sfz_map_from_config, sfz_voice_generator, SFZVoice
+    # from pyo_addons.embedded_pyo_synth import instrument_generator, PyoSynth
+    # map = get_sfz_map_from_config('../config/dskconfig.json')
+    # INST_PROGRAMS = {i: instrument_generator(4, sfz_voice_generator(name)) for i, name in enumerate(map.keys())}
+    # PyoSynth.configure(INST_PROGRAMS, lambda *args: SFZVoice.read_sounds(map))
+    # PyoSynth.configure_instrument_map(read_sfz_config('../config/dskconfig.json'))
+    # main(PyoSynth(True))
+
+    from music21_addons.sequencer import PyFluidSynth
     PyFluidSynth.init_synth('/Users/shiva/sounds/soundfonts/FluidR3_GM.sf2')
     PyFluidSynth.configure_instrument_map(get_flat_gm_instrument_map())
-    main()
+    main(PyFluidSynth())

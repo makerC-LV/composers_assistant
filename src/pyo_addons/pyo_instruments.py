@@ -1,6 +1,6 @@
 from pyo import Sine
 
-from pyo_addons.pyo_midi_server import Voice
+from pyo_addons.embedded_pyo_synth import Voice
 
 
 class SineVoice(Voice):
