@@ -314,7 +314,7 @@ class MySequencer():
 if __name__ == '__main__':
     from music21 import converter, stream
 
-    part = converter.parse('tinynotation: 3/4 C4 D E 2/4 F G A B 1/4 c')
+    part = converter.parse('tinynotation: C4 D E F G A B c')
     score = stream.Score()
     score.insert(0, part)
     seq = MySequencer(MidoSynth())
