@@ -2,8 +2,9 @@ import math
 import os
 import re
 from io import open
+import logging
 
-from utils import elogger
+logger = logging.getLogger(__name__)
 
 SFZ_NOTE_LETTER_OFFSET = {'a': 9, 'b': 11, 'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7}
 
@@ -144,7 +145,7 @@ class SFZParser(object):
         for linenum, line in enumerate(sfz):
             line = line.strip()
             if self.debug:
-                elogger.info(linenum, line)
+                logger.debug("%s: %s", linenum, line)
 
             if not line:
                 continue
@@ -216,12 +217,12 @@ class SFZ():
     def get_sound_info(self, note, velocity):
         vmap = self.note_map.get(note, None)
         if vmap is None:
-            elogger.error("No velocity map for note:", note, self.sfz_path)
+            logger.error("No velocity map for note: %s  path: %s", note, self.sfz_path)
             return []
         else:
             sinfo = vmap.get(velocity, None)
             if sinfo is None:
-                elogger.error("No entry for note, velocity:", note, velocity, self.sfz_path)
+                logger.error("No entry for note: %s, velocity: %s, path: %s", note, velocity, self.sfz_path)
                 return []
             return sinfo
 

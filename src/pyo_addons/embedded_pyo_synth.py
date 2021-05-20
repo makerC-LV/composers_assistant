@@ -1,10 +1,12 @@
+import logging
 import time
+from typing import Dict, Callable, Optional, Tuple
 
-from mido import Message
-from pyo import MToF, Sig, Server, RawMidi
+from pyo import MToF, Sig, Server
 
-from utils import elogger
-from typing import Dict
+from music21_addons.sequencer import Synth
+
+logger = logging.getLogger(__name__)
 
 INST_CHANNELS = [x for x in range(0, 9)] + [x for x in range(10, 16)]
 
@@ -34,7 +36,7 @@ class Voice():
 
     def play(self):
         if self.debug:
-            elogger.info("Play: ", self.name)
+            logger.info("Play: %s", self.name)
         self.is_playing = True
         for arg in self.playables:
             arg.play()
@@ -43,7 +45,7 @@ class Voice():
 
     def stop(self):
         if self.debug:
-            elogger.info("Stop: ", self.name)
+            logger.info("Stop: %s", self.name)
         for arg in self.playables:
             arg.stop()
         if self.output is not None:
@@ -109,7 +111,7 @@ class MidiChannel():
         try:
             # new_program = self.prog.get()
             if new_program != self.current_program:
-                elogger.info("Program change on chan:", self.channelnum, " value:", new_program)
+                logger.info("Program change on chan: %s  value: %s", self.channelnum, new_program)
                 if self.current_inst is not None:
                     self.insts[self.current_program] = self.current_inst
                 if new_program in self.insts:
@@ -118,18 +120,53 @@ class MidiChannel():
                     self.current_inst = self.midisetup.create_inst(new_program)
                     self.insts[new_program] = self.current_inst
                 self.current_program = new_program
-        except Exception:
-            elogger.exception()
+        except Exception as e:
+            logger.error(e, exc_info=True)
 
 
-class MidiSetup():
+class PyoSynth(Synth):
+    _instrument_map = None
+    _instrument_creator_map = None
+    pyo_server = None
 
-    def __init__(self, inst_programs):
+    @classmethod
+    def configure(cls, inst_creator_map: Dict[int, Callable], load_instruments_fn=lambda *args: None):
+        PyoSynth._instrument_creator_map = inst_creator_map
+        if PyoSynth.pyo_server is None:
+            PyoSynth.pyo_server = Server()
+            PyoSynth.pyo_server.setMidiInputDevice(99)  # Open all input devices.
+            PyoSynth.pyo_server.boot()
+            PyoSynth.pyo_server.start()
+        try:
+            load_instruments_fn()
+        except Exception as e:
+            logger.exception(e, exc_info=True)
+
+    @classmethod
+    def configure_instrument_map(cls, instrument_map: Dict[Tuple[str, str], int]):
+        PyoSynth._instrument_map = instrument_map
+
+    def __init__(self):
         self.channels = {i: MidiChannel(self, i) for i in INST_CHANNELS}
-        self.inst_programs = inst_programs
+
+    def note_on(self, notenum, chan, velocity):
+        self.channels[chan].note_on(notenum, velocity)
+
+    def note_off(self, notenum, chan, velocity):
+        self.channels[chan].note_off(notenum, velocity)
+
+    def program_change(self, chan, inst):
+        self.channels[chan].pchange(inst)
+
+    def get_instrument_map(self) -> Optional[Dict[Tuple[str, str], int]]:
+        return PyoSynth._instrument_map
 
     def create_inst(self, program):
-        return self.inst_programs[program]()
+        return PyoSynth._instrument_creator_map[program]()
+
+    @classmethod
+    def stop(cls):
+        PyoSynth.pyo_server.stop()
 
 
 def voice_generator(voice_class):
@@ -147,57 +184,16 @@ def instrument_generator(polyphony, voice_generator):
 
 
 def run_server(midi_setup, inst_init_func=lambda *args: None):
-    s = Server()
-    s.setMidiInputDevice(99)  # Open all input devices.
-    s.boot()
-    s.start()
+    pyo_server = Server()
+    pyo_server.setMidiInputDevice(99)  # Open all input devices.
+    pyo_server.boot()
+    pyo_server.start()
     try:
         inst_init_func()
-    except Exception:
-        elogger.exception()
-        s.stop()
+    except Exception as e:
+        logger.exception(e, exc_info=True)
+        pyo_server.stop()
         time.sleep(5)
         exit()
 
-    def event(status, data1, data2):
-        try:
-            # elogger.info(status, data1, data2)
-            if status >= 0xC0 and status <= 0xCF:  # prog change
-                m = Message.from_bytes([status, data1])
-                ch = m.channel
-                pg = m.program
-                midi_setup.channels[ch].pchange(pg)
-            else:
-                m = Message.from_bytes([status, data1, data2])
-                if m.type == "note_on":
-                    midi_setup.channels[m.channel].note_on(m.note, m.velocity)
-                elif m.type == "note_off":
-                    midi_setup.channels[m.channel].note_off(m.note, m.velocity)
-                elif m.type == "pitchwheel":
-                    midi_setup.channels[m.channel].pitchwheel(m.pitch)
-                else:
-                    elogger.warn("Ignoring: ", m)
-        except Exception:
-            elogger.exception()
-
-    # Needs to be global so it doesn't get garbage collected
-    global midi_receiver
-    midi_receiver = RawMidi(event)
-
-    return s
-
-
-if __name__ == '__main__':
-    from pyo_addons.sfz_instrument import SFZVoice, get_sfz_map_from_config, sfz_voice_generator
-
-    # sine = instrument_generator(4, voice_generator(SineVoice))
-    # INST_PROGRAMS = {1: sine, 2: sine, 3: sine, 4: sine}
-
-    map = get_sfz_map_from_config('../config/dskconfig.json')
-    INST_PROGRAMS = {i: instrument_generator(4, sfz_voice_generator(name)) for i, name in enumerate(map.keys())}
-    ms = MidiSetup(INST_PROGRAMS)
-    s = run_server(ms, lambda *args: SFZVoice.read_sounds(map))
-    # s = run_server(ms)
-    print('Here')
-
-    s.gui(locals())
+    return pyo_server
