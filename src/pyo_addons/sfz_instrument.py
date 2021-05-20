@@ -6,12 +6,14 @@ from typing import Dict, Tuple
 
 from pyo import SndTable, DataTable, Adsr, LFO, TableRead, Pan, ButLP, Freeverb, Chorus
 
-from pyo_addons.pyo_midi_server import Voice
+from pyo_addons.embedded_pyo_synth import Voice
 from pyo_addons.sfz_parser import SFZParser
 import numpy as np
 
-from utils import elogger
 from pyo_addons.sfz_parser import SFZ
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SFZVoice(Voice):
@@ -23,7 +25,7 @@ class SFZVoice(Voice):
         for name, path in name_path_map.items():
             if name not in SFZVoice.sfz_map:
                 parser = SFZParser(path)
-                elogger.info("Loading ", path)
+                logger.info("Loading %s", path)
                 sfz = parser.create_sfz()
                 SFZVoice.sfz_map[name] = sfz
                 for region in sfz.regions:
@@ -55,7 +57,7 @@ class SFZVoice(Voice):
         if len(rlist) == 0:
             return None
         if len(rlist) > 1:
-            elogger.error("More than one region", self.note, self.velocity)
+            logger.error("More than one region for: %s, %s", self.note, self.velocity)
         return rlist[0]
 
     def play(self):
@@ -146,7 +148,7 @@ def get_flat_sfz_map(map) -> Dict[Tuple[str, str], int]:
 
 def get_sfz_map_from_config(file) -> Dict[str, int]:
     with open(file, 'r') as cf:
-        map = json.load(cf)   #type: Dict[str, int]
+        map = json.load(cf)  # type: Dict[str, int]
     return map
 
 

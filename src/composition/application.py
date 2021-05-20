@@ -5,7 +5,7 @@ from typing import Any, Dict, Tuple
 from music21 import stream, key, meter, instrument
 
 from music21_addons.onetrack import onetrack_parser, onetrack_to_part, part_to_onetrack
-from music21_addons.sequencer import MySequencer, PyFluidSynth
+from music21_addons.sequencer import MySequencer, Synth
 
 logger = logging.getLogger(__name__)
 
@@ -141,13 +141,21 @@ APSTATE_PLAYING = 'Playing'
 
 
 class AudioPlayer():
-    def __init__(self):
+    def __init__(self, synth: Synth):
         self.state = Observable(APSTATE_STOPPED)
         self.tempo = Observable(60)
         self.length = Observable(60000)
         self.cue_pos = Observable(0)
+        self.sequencer = MySequencer(synth)
+
+        # from music21_addons.sequencer import MidoSynth
         # self.sequencer = MySequencer(MidoSynth(True))
-        self.sequencer = MySequencer(PyFluidSynth())
+
+        # from music21_addons.sequencer import PyFluidSynth
+        # self.sequencer = MySequencer(PyFluidSynth())
+
+        # from pyo_addons.embedded_pyo_synth import PyoSynth
+        # self.sequencer = MySequencer(PyoSynth())
 
     def play_or_pause(self, tracks, timesig):
         if self.state.value == APSTATE_PLAYING:
@@ -217,13 +225,13 @@ class AudioPlayer():
 
 
 class MultiTrack():
-    def __init__(self, gui):
+    def __init__(self, gui, synth):
         self.gui = gui
         self.key = Observable(key.Key('C'))
         self.timesig = Observable(meter.TimeSignature('4/4'))
 
         self.tracks = []
-        self.player = AudioPlayer()
+        self.player = AudioPlayer(synth)
 
     def add_track(self):
         new_track = Track(self.timesig, self.key,

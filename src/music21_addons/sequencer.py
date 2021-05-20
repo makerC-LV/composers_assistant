@@ -95,8 +95,7 @@ class MidoSynth(Synth):
     def configure_instrument_map(cls, instrument_map: Dict[Tuple[str, str], int]):
         MidoSynth._instrument_map = instrument_map
 
-    def __init__(self, debug=False):
-        self.debug = debug
+    def __init__(self):
         mido.set_backend('mido.backends.pygame')
         pname = mido.get_output_names()[0]
         self.port = mido.open_output(pname)
@@ -105,20 +104,17 @@ class MidoSynth(Synth):
         self.port.close()
 
     def note_on(self, notenum, chan, velocity):
-        if self.debug:
-            logger.info("note_on: %s %s %s ", notenum, chan, velocity)
+        logger.debug("note_on: %s %s %s ", notenum, chan, velocity)
         msg = Message('note_on', note=notenum, channel=chan, velocity=velocity)
         self.port.send(msg)
 
     def note_off(self, notenum, chan, velocity):
-        if self.debug:
-            logger.info("note_off: %s %s %s ", notenum, chan, velocity)
+        logger.debug("note_off: %s %s %s ", notenum, chan, velocity)
         msg = Message('note_off', note=notenum, channel=chan, velocity=velocity)
         self.port.send(msg)
 
     def program_change(self, chan, inst):
-        if self.debug:
-            logger.info("program_change: %s %s", chan, inst)
+        logger.debug("program_change: %s %s", chan, inst)
         msg = Message('program_change', channel=chan, program=inst)
         self.port.send(msg)
 
@@ -134,6 +130,7 @@ DEFAULT_VELOCITY = 60
 
 
 class MySequencer():
+
     def __init__(self, synth):
         self.synth = synth
         self.playing = False
