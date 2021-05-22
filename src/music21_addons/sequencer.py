@@ -223,7 +223,7 @@ class MySequencer():
                 chord_velocity = self.compute_velocity(ncr.volume, None)
                 num_pitches = len(ncr.pitches)
                 for n in ncr.notes:
-                    velocity = int(chord_velocity / num_pitches) if chord_velocity is not None else \
+                    velocity = chord_velocity if chord_velocity is not None else \
                         self.compute_velocity(n.volume, DEFAULT_VELOCITY / num_pitches)
                     note_fn(n.pitch.midi, chan, velocity)
                 on_fn(id(ncr), ncr, inst, chan)

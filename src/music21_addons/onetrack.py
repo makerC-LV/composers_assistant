@@ -19,16 +19,28 @@ REVERSE_QL_MAP = {v: k for k, v in QL_MAP.items()}
 
 @dataclass
 class Located():
-    start_line: int = 0
-    start_column: int = 0
-    end_line: int = 0
-    end_column: int = 0
+    def __init__(self, start_line: int = 0,
+                 start_column: int = 0,
+                 end_line: int = 0,
+                 end_column: int = 0):
+        self.start_line = start_line
+        self.start_column = start_column
+        self.end_line = end_line
+        self.end_column = end_column
 
     def location(self):
         return (self.start_line, self.start_column, self.end_line, self.end_column)
 
     def _loc(self):
         return f'{self.start_line}:{self.start_column}-{self.end_line}:{self.end_column}'
+
+    def location_intersects(self, sl, sc, el, ec):
+        (ssl, ssc, sel, sec) = self.location()
+        if el < ssl or (el == ssl and ec < ssc):  # other interval ends before this starts
+            return False
+        elif sl > sel or (sl == sel and sc > sec):  # other interval starts after this ends
+            return False
+        return True
 
 
 def get_location(*args):
@@ -60,6 +72,7 @@ def onetrack_parser():
 
 class PNote(Located):
     def __init__(self, ppitch: Token, duration: Optional[Token] = None, velocity: Optional[Token] = None):
+        super().__init__()
         self.pitch = ppitch
         self.duration = duration
         self.velocity = velocity
@@ -80,6 +93,7 @@ class PNote(Located):
 
 class PChord(Located):
     def __init__(self, pitches: List[Token], duration: Optional[Token] = None, velocity: Optional[Token] = None):
+        super().__init__()
         self.pitches = pitches
         self.duration = duration
         self.velocity = velocity
@@ -200,8 +214,8 @@ def to_text(obj_list) -> str:
     return ' '.join([str(x) for x in obj_list])
 
 
-def to_part(obj_list, track=None) -> Tuple[stream.Part, Dict[int, Tuple[Union[PChord, PNote], Any]]]:
-    map = {}  # type: Dict[int, Tuple[Union[PChord, PNote], Any]]
+def to_part(obj_list, track=None) -> Tuple[stream.Part, Dict[int, Tuple[Union[PChord, PNote], note.GeneralNote, Any]]]:
+    map = {}  # type: Dict[int, Tuple[Union[PChord, PNote], note.GeneralNote, Any]]
     curr_vel = DEFAULT_VOLUME
     part = stream.Part()
     for cn in obj_list:
@@ -218,7 +232,7 @@ def to_part(obj_list, track=None) -> Tuple[stream.Part, Dict[int, Tuple[Union[PC
                 vel = get_velocity(cn.velocity, default=curr_vel)
                 n.volume = volume.Volume(velocity=vel)
             part.append(n)
-            map[id(n)] = (cn, track)
+            map[id(n)] = (cn, n, track)
         elif isinstance(cn, PChord):
             ch = chord.Chord(cn.pitches)
             for p in ch.pitches:
@@ -229,7 +243,7 @@ def to_part(obj_list, track=None) -> Tuple[stream.Part, Dict[int, Tuple[Union[PC
             vel = get_velocity(cn.velocity, default=curr_vel)
             ch.volume = volume.Volume(velocity=vel)
             part.append(ch)
-            map[id(ch)] = (cn, track)
+            map[id(ch)] = (cn, ch, track)
         elif isinstance(cn, SetVol):
             curr_vel = int(cn.velocity)
         else:

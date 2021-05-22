@@ -1,4 +1,14 @@
-from music21_addons.onetrack import to_text, parse_onetrack
+from music21_addons.onetrack import to_text, parse_onetrack, Located
+
+
+def test_location():
+    loc = Located(1, 5, 2, 8)
+    assert loc.location_intersects(1, 6, 1, 7)
+    assert loc.location_intersects(1, 2, 1, 6)
+    assert loc.location_intersects(2, 6, 3, 7)
+    assert loc.location_intersects(1, 2, 3, 7)
+    assert not loc.location_intersects(1, 1, 1, 3)
+    assert not loc.location_intersects(3, 1, 3, 3)
 
 
 def test_note():
